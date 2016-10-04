@@ -314,8 +314,54 @@ private:
 };
 
 
+class ArgParser
+{
+public:
+	int Row() const {return _row;}
+	int Col() const {return _col;}
+
+	const vector<Shape>& Shapes() {return _shapes;}
+
+	void parse(int argc, char** argv)
+	{
+		_row = atoi(argv[1]);
+		_col = atoi(argv[2]);
+		for(int i=3;i<argc;i++)
+		{
+			string shape = string(argv[i]);
+			ShapeType type = shapeType(shape);
+			_shapes.push_back(Shape(type, i-2));
+		}
+	}
+private:
+	ShapeType shapeType(const string& shape)
+	{
+		if(shape == "T")
+			return ShapeType::T;
+		else if(shape == "Col")
+			return ShapeType::Col;
+		else if(shape == "L")
+			return ShapeType::L;
+		else if(shape == "iL")
+			return ShapeType::iL;
+		else if(shape == "Square")
+			return ShapeType::Square;
+		else if(shape == "Z")
+			return ShapeType::Z;
+		else if(shape == "iZ")
+			return ShapeType::iZ;
+		else
+			throw std::runtime_error("Bad shape type!");
+	}
+private:
+	int _row;
+	int _col;
+	vector<Shape> _shapes;
+};
+
 int main(int argc, char** argv)
 {
+	/*
 	vector<Shape> shapes;
 	shapes.push_back(Shape(ShapeType::T, 1));
 	shapes.push_back(Shape(ShapeType::T, 2));
@@ -330,6 +376,11 @@ int main(int argc, char** argv)
 	shapes.push_back(Shape(ShapeType::Z, 11));
 	shapes.push_back(Shape(ShapeType::Z, 12));
 	Puzzle puzzle(6, 8, shapes);
+	*/
+
+	ArgParser argsParser;
+	argsParser.parse(argc, argv);
+	Puzzle puzzle(argsParser.Row(),argsParser.Col(), argsParser.Shapes());
 	puzzle.solve();
 	puzzle.print();
 }
