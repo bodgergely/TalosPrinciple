@@ -5,6 +5,9 @@
 #include <iostream>
 #include <sstream>
 #include <cstring>
+#include <chrono>
+#include <unordered_set>
+#include <ctime>
 
 using namespace std;
 
@@ -76,6 +79,34 @@ public:
 	}
 	int id() const {return _id;}
 	ShapeType type() const {return _type;}
+	
+	string toString() const
+	{
+		switch(_type)
+		{
+		case ShapeType::L:
+			return "L";
+			
+		case ShapeType::iL:
+			return "iL";
+			
+		case ShapeType::Square:
+			return "Square";
+			
+		case ShapeType::Col:
+			return "Col";
+			
+		case ShapeType::Z:
+			return "Z";
+			
+		case ShapeType::iZ:
+			return "iZ";
+			
+		case ShapeType::T:
+			return "T";
+			
+		}
+	}
 
 private:
 	int		  _id;
@@ -253,10 +284,32 @@ ostream& operator<<(ostream& os, const Board& board)
 class Puzzle
 {
 public:
-	Puzzle(int numRows, int numCols, const vector<Shape>& shapes) : _startShapes(shapes), _board(numRows, numCols) {}
+	Puzzle(int numRows, int numCols, const vector<Shape>& shapes, bool randomize = false, int timeout = 5) : _startShapes(shapes), _board(numRows, numCols),
+																																					_randomize(randomize),
+																																					_timeout(timeout){}
 	void solve()
 	{
-		_solve(_startShapes);
+		int tries = 1;
+		while(true)
+		{
+			cout << "Attempt: " << tries++ << "\n";
+			vector<Shape> shapesToStart = _startShapes;
+			_timedOut = false;
+			if(_randomize)
+			{
+				shapesToStart = randomize(_startShapes);
+			}
+			
+			_startTime = chrono::system_clock::now();
+			print(shapesToStart);
+			if(_solve(shapesToStart))
+				break;
+				
+			if(_randomize)
+				continue;
+			else
+				break;
+		}
 	}
 	void print()
 	{
@@ -264,10 +317,54 @@ public:
 	}
 
 private:
+
+	void print(const vector<Shape>& shapes)
+	{
+		for(const Shape& sh : shapes)
+		{
+			cout << sh.toString() << " ";
+		}
+		cout << "\n";
+	}
+
+	vector<Shape> randomize(const vector<Shape>& shapes)
+	{
+		srand(time(NULL));
+		vector<Shape> shapesReordered;
+		vector<int> indexes;
+		unordered_set<int> indexchosen;
+		int numofindexes = shapes.size();
+		while(indexchosen.size()!=numofindexes)
+		{
+			int i = rand() % numofindexes;
+			if(indexchosen.find(i)==indexchosen.end())
+			{
+				indexchosen.insert(i);
+				indexes.push_back(i);
+			}
+		}
+		
+		for(int i=0;i<indexes.size();i++)
+			shapesReordered.push_back(shapes[indexes[i]]);
+		
+		return shapesReordered;
+	}
+
 	bool _solve(vector<Shape> shapes)
 	{
 		for(int i=0;i<shapes.size();i++)
 		{
+			auto now = chrono::system_clock::now();
+			if(!_solutionFound && _timedOut)
+			{
+				return false;
+			}
+			if(!_solutionFound && _timeout!= 0 && chrono::duration_cast<chrono::seconds>(now-_startTime).count() > _timeout)
+			{
+				cout << "Timed out\n";
+				_timedOut = true;
+				return false;
+			}
 			bool placed = place(shapes[i]);
 			if(placed)
 			{
@@ -278,7 +375,11 @@ private:
 				vector<Shape> newShapeSet = _excludeFromSet(i, shapes);
 				bool solved = _solve(newShapeSet);
 				if(solved)
+				{
+					cout << "Solution found!\n";
+					_solutionFound = true;
 					return true;
+				}
 				else
 				{
 					_board.erase(shapes[i].id());
@@ -311,6 +412,11 @@ private:
 private:
 	vector<Shape> _startShapes;
 	Board _board;
+	bool	_randomize;
+	int _timeout;
+	std::chrono::system_clock::time_point _startTime;
+	bool _timedOut{false};
+	bool _solutionFound{false};
 };
 
 
@@ -319,6 +425,8 @@ class ArgParser
 public:
 	int Row() const {return _row;}
 	int Col() const {return _col;}
+	bool Rand() const {return _rand;}
+	int TimeOut() const {return _timeout;}
 
 	const vector<Shape>& Shapes() {return _shapes;}
 
@@ -326,12 +434,30 @@ public:
 	{
 		_row = atoi(argv[1]);
 		_col = atoi(argv[2]);
-		for(int i=3;i<argc;i++)
+		int numOfShapes = atoi(argv[3]);
+		for(int i=4;i<4+numOfShapes;i++)
 		{
 			string shape = string(argv[i]);
 			ShapeType type = shapeType(shape);
 			_shapes.push_back(Shape(type, i-2));
 		}
+		
+		if(argc >= 4+numOfShapes && string(argv[4+numOfShapes]) == string("-r") )
+		{
+			cout << "Randomizer mode set.\n";
+			_rand = true;
+		}
+		
+		if(argc >= 4+numOfShapes + 1)
+		{
+			_timeout = atoi(argv[4+numOfShapes+1]);
+		}
+		else
+		{
+			_timeout = 0;
+		}
+		cout << "time out: " << _timeout << endl;
+		
 	}
 private:
 	ShapeType shapeType(const string& shape)
@@ -357,6 +483,8 @@ private:
 	int _row;
 	int _col;
 	vector<Shape> _shapes;
+	bool _rand {false};
+	int _timeout;
 };
 
 int main(int argc, char** argv)
@@ -380,7 +508,7 @@ int main(int argc, char** argv)
 
 	ArgParser argsParser;
 	argsParser.parse(argc, argv);
-	Puzzle puzzle(argsParser.Row(),argsParser.Col(), argsParser.Shapes());
+	Puzzle puzzle(argsParser.Row(),argsParser.Col(), argsParser.Shapes(), argsParser.Rand(), argsParser.TimeOut());
 	puzzle.solve();
 	puzzle.print();
 }
